@@ -17,7 +17,7 @@ export default function initSettings() {
             },
             {
                 key: "KETTU_BROWSER",
-                title: () => Strings.BROWSER,
+                title: () => "Biblioteca de Plugins",
                 icon: findAssetId("ChannelListMagnifyingGlassIcon"),
                 render: () => import("@core/ui/settings/pages/PluginBrowser")
             },
