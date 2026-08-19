@@ -9881,423 +9881,177 @@
   // src/core/ui/settings/pages/PluginBrowser/index.tsx
   var PluginBrowser_exports = {};
   __export(PluginBrowser_exports, {
-    default: () => BrowserPage
+    default: () => PluginBrowser
   });
-  function normalizeIdFromInstallUrl(url2) {
-    return url2.endsWith("/") ? url2 : url2 + "/";
+  function normalizePluginUrl(url2) {
+    return url2.endsWith("/") ? url2 : `${url2}/`;
   }
-  function InstallButton({ addon, isPluginMode, installing, setInstalling, setRefreshTick }) {
-    var normId = normalizeIdFromInstallUrl(addon.installUrl);
-    var [installed, setInstalled] = React2.useState(() => isPluginMode ? Boolean(VdPluginManager.plugins[normId]) : Boolean(themes[addon.installUrl]));
-    React2.useEffect(() => {
-      setInstalled(isPluginMode ? Boolean(VdPluginManager.plugins[normId]) : Boolean(themes[addon.installUrl]));
-    }, [
-      addon.installUrl,
-      setRefreshTick,
-      isPluginMode
-    ]);
-    var installAddon = () => _async_to_generator(function* () {
-      if (installing.has(normId))
+  function PluginCatalogCard({ plugin, onChanged }) {
+    var pluginUrl = normalizePluginUrl(plugin.installUrl);
+    var installed = Boolean(VdPluginManager.plugins[pluginUrl]);
+    var [busy, setBusy] = React2.useState(false);
+    var install = () => _async_to_generator(function* () {
+      if (busy)
         return;
-      setInstalling((prev) => new Set(prev).add(normId));
+      setBusy(true);
       try {
-        if (isPluginMode) {
-          yield VdPluginManager.installPlugin(normId, true);
-        } else {
-          yield installTheme(addon.installUrl);
-        }
-        showToast(`Installed ${addon.name}`, findAssetId("CheckIcon"));
-        setInstalled(true);
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : String(e), findAssetId("CircleXIcon-primary"));
+        yield VdPluginManager.installPlugin(pluginUrl, true);
+        showToast(`${plugin.name} instalado.`, findAssetId("Check"));
+        onChanged();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : String(error), findAssetId("CircleXIcon-primary"));
       } finally {
-        setInstalling((prev) => {
-          var s = new Set(prev);
-          s.delete(normId);
-          return s;
-        });
-        setRefreshTick((t) => t + 1);
+        setBusy(false);
       }
     })();
-    var uninstallAddon = () => _async_to_generator(function* () {
+    var remove = () => _async_to_generator(function* () {
+      if (busy)
+        return;
+      setBusy(true);
       try {
-        if (isPluginMode) {
-          yield VdPluginManager.removePlugin(normId);
-        } else {
-          yield removeTheme(addon.installUrl);
-        }
-        showToast(`Uninstalled ${addon.name}`, findAssetId("TrashIcon"));
-        setInstalled(false);
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : String(e), findAssetId("CircleXIcon-primary"));
+        yield VdPluginManager.removePlugin(pluginUrl);
+        showToast(`${plugin.name} removido.`, findAssetId("TrashIcon"));
+        onChanged();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : String(error), findAssetId("CircleXIcon-primary"));
       } finally {
-        setRefreshTick((t) => t + 1);
+        setBusy(false);
       }
     })();
-    var promptInstall = () => {
-      if (!isPluginMode)
-        return installAddon();
-      var plugin = addon;
-      var needsWarn = plugin.status && plugin.status !== "working" || plugin.warningMessage && plugin.warningMessage.trim().length > 0;
-      if (!needsWarn)
-        return installAddon();
-      var lines = [];
-      if (plugin.status && plugin.status !== "working") {
-        if (plugin.status === "broken")
-          lines.push("This plugin is marked as broken, please be aware you may encounter issues");
-        else if (plugin.status === "warning")
-          lines.push("This plugin may have issues");
-        else
-          lines.push(`Status: ${plugin.status}`);
-      }
-      if (plugin.warningMessage)
-        lines.push(plugin.warningMessage);
-      openAlert("plugins-list-install-warning", /* @__PURE__ */ jsx(AlertModal, {
-        title: "Warning!",
-        content: "This plugin may not work as expected.",
-        extraContent: /* @__PURE__ */ jsx(Text, {
-          variant: "text-sm/normal",
-          color: "text-muted",
-          children: lines.join("\n\n")
-        }),
-        actions: /* @__PURE__ */ jsxs(AlertActions, {
-          children: [
-            /* @__PURE__ */ jsx(AlertActionButton2, {
-              text: "Install Anyway",
-              variant: "primary",
-              onPress: () => {
-                dismissAlert("plugins-list-install-warning");
-                installAddon();
-              }
-            }),
-            /* @__PURE__ */ jsx(AlertActionButton2, {
-              text: "Cancel",
-              variant: "secondary",
-              onPress: () => dismissAlert("plugins-list-install-warning")
-            })
-          ]
-        })
-      }));
-    };
-    return /* @__PURE__ */ jsx(Button, {
-      size: "sm",
-      loading: installing.has(normId),
-      text: !installed ? installing.has(normId) ? "Installing..." : "Install" : "Uninstall",
-      disabled: installing.has(normId),
-      onPress: !installed ? promptInstall : uninstallAddon,
-      variant: !installed ? "primary" : "destructive",
-      icon: findAssetId(!installed ? "DownloadIcon" : "TrashIcon")
-    });
-  }
-  function TrailingButtons({ addon, isPluginMode, installing, setInstalling, setRefreshTick }) {
-    var copyAddonLink = () => {
-      clipboard.setString(addon.installUrl);
-      showToast.showCopyToClipboard?.();
-    };
-    var copySourceUrl = () => {
-      var plugin = addon;
-      clipboard.setString(plugin.sourceUrl);
-      showToast.showCopyToClipboard?.();
-    };
-    var openAddonMenu = () => {
-      var actions = [
-        {
-          label: `Copy ${isPluginMode ? "Plugin" : "Theme"} Link`,
-          icon: findAssetId("CopyIcon"),
-          onPress: copyAddonLink
-        }
-      ];
-      if (isPluginMode && addon.sourceUrl) {
-        actions.push({
-          label: "Copy Source URL",
-          icon: findAssetId("CopyIcon"),
-          onPress: copySourceUrl
-        });
-      }
-      var sheetKey = `${isPluginMode ? "plugin" : "theme"}-menu`;
-      showSheet(sheetKey, () => /* @__PURE__ */ jsx(ActionSheet, {
-        children: /* @__PURE__ */ jsx(TableRowGroup, {
-          title: `${isPluginMode ? "Plugin" : "Theme"} Info`,
-          children: actions.map((action, index) => /* @__PURE__ */ jsx(TableRow, {
-            label: action.label,
-            icon: /* @__PURE__ */ jsx(TableRow.Icon, {
-              source: action.icon
-            }),
-            onPress: () => {
-              action.onPress();
-              hideSheet(sheetKey);
-            }
-          }, index))
-        })
-      }));
-    };
-    return /* @__PURE__ */ jsxs(Stack, {
-      spacing: 8,
-      direction: "horizontal",
-      children: [
-        /* @__PURE__ */ jsx(IconButton, {
-          size: "sm",
-          onPress: openAddonMenu,
-          variant: "secondary",
-          icon: findAssetId("MoreHorizontalIcon")
-        }),
-        /* @__PURE__ */ jsx(InstallButton, {
-          addon,
-          isPluginMode,
-          installing,
-          setInstalling,
-          setRefreshTick
-        })
-      ]
-    });
-  }
-  function AddonCard({ addon, isPluginMode, installing, setInstalling, setRefreshTick }) {
-    var { name, description, authors } = addon;
-    var plugin = addon;
-    var statusColor = "text-normal";
-    if (isPluginMode) {
-      if (plugin.status === "working")
-        statusColor = "#4ADE80";
-      if (plugin.status === "broken")
-        statusColor = "#EF4444";
-      if (plugin.status === "warning")
-        statusColor = "#F59E0B";
-    }
     return /* @__PURE__ */ jsx(Card, {
       children: /* @__PURE__ */ jsxs(Stack, {
-        spacing: 16,
+        spacing: 12,
         children: [
           /* @__PURE__ */ jsxs(import_react_native21.View, {
             style: {
               flexDirection: "row",
+              alignItems: "flex-start",
               justifyContent: "space-between",
-              alignItems: "center"
+              gap: 12
             },
             children: [
               /* @__PURE__ */ jsxs(import_react_native21.View, {
                 style: {
+                  flex: 1,
                   flexShrink: 1
                 },
                 children: [
                   /* @__PURE__ */ jsx(Text, {
-                    numberOfLines: 1,
                     variant: "heading-lg/semibold",
-                    children: name
+                    numberOfLines: 1,
+                    children: plugin.name
                   }),
                   /* @__PURE__ */ jsxs(Text, {
-                    variant: "text-md/semibold",
+                    variant: "text-sm/semibold",
                     color: "text-muted",
                     children: [
-                      "by ",
-                      authors?.join(", ") || "Unknown"
-                    ]
-                  }),
-                  isPluginMode && /* @__PURE__ */ jsxs(Text, {
-                    variant: "text-md/semibold",
-                    style: {
-                      color: statusColor
-                    },
-                    children: [
-                      "Status: ",
-                      plugin.status
+                      "por ",
+                      plugin.authors.join(", "),
+                      " \u2022 v",
+                      plugin.version
                     ]
                   })
                 ]
               }),
-              /* @__PURE__ */ jsx(import_react_native21.View, {
-                children: /* @__PURE__ */ jsx(TrailingButtons, {
-                  addon,
-                  isPluginMode,
-                  installing,
-                  setInstalling,
-                  setRefreshTick
-                })
+              /* @__PURE__ */ jsx(Button, {
+                size: "sm",
+                text: installed ? "Remover" : busy ? "Instalando..." : "Instalar",
+                variant: installed ? "destructive" : "primary",
+                disabled: busy,
+                loading: busy,
+                icon: findAssetId(installed ? "TrashIcon" : "DownloadIcon"),
+                onPress: installed ? remove : install
               })
             ]
           }),
           /* @__PURE__ */ jsx(Text, {
             variant: "text-md/medium",
-            children: description
-          }),
-          isPluginMode && plugin.warningMessage && /* @__PURE__ */ jsxs(Text, {
-            variant: "text-sm/medium",
-            color: "text-muted",
-            children: [
-              "Warning: ",
-              plugin.warningMessage
-            ]
+            children: plugin.description
           })
         ]
       })
     });
   }
-  function BrowserPage() {
+  function PluginBrowser() {
     var navigation2 = NavigationNative.useNavigation();
-    var [mode, setMode] = React2.useState("plugins");
     var [plugins2, setPlugins] = React2.useState([]);
-    var [themesList, setThemesList] = React2.useState([]);
+    var [query, setQuery] = React2.useState("");
     var [loading, setLoading] = React2.useState(true);
     var [error, setError] = React2.useState(null);
-    var [searchQuery, setSearchQuery] = React2.useState("");
-    var [installing, setInstalling] = React2.useState(/* @__PURE__ */ new Set());
-    var [refreshTick, setRefreshTick] = React2.useState(0);
-    var [sort, setSort] = React2.useState("Newest");
+    var [, forceUpdate] = React2.useReducer((value) => value + 1, 0);
     React2.useEffect(() => {
       navigation2.setOptions({
-        title: "Browser"
+        title: "Biblioteca de Plugins"
       });
     }, [
       navigation2
     ]);
-    var fetchData = React2.useCallback((isPluginMode) => _async_to_generator(function* () {
+    var loadCatalog = React2.useCallback(() => _async_to_generator(function* () {
       setLoading(true);
       setError(null);
       try {
-        var url2 = isPluginMode ? PLUGIN_URL : THEME_URL;
-        var response = yield safeFetch(url2);
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        var response = yield safeFetch(CATALOG_URL, {
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error(`Falha ao carregar cat\xE1logo: HTTP ${response.status}`);
+        }
         var data = yield response.json();
-        var addonList = [];
-        if (Array.isArray(data)) {
-          addonList = data;
-        } else if (isPluginMode && data.OFFICIAL_PLUGINS) {
-          addonList = data.OFFICIAL_PLUGINS;
-        } else if (!isPluginMode) {
-          addonList = data.OFFICIAL_THEMES || data.themes || data.THEMES || data.items || [];
+        if (!Array.isArray(data)) {
+          throw new Error("O cat\xE1logo de plugins possui um formato inv\xE1lido.");
         }
-        if (isPluginMode) {
-          setPlugins(addonList);
-        } else {
-          setThemesList(addonList);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        if (isPluginMode) {
-          setPlugins([]);
-        } else {
-          setThemesList([]);
-        }
+        setPlugins(data);
+      } catch (err) {
+        setPlugins([]);
+        setError(err instanceof Error ? err.message : String(err));
       } finally {
         setLoading(false);
       }
     })(), []);
-    var fetchPlugins = React2.useCallback(() => fetchData(true), [
-      fetchData
-    ]);
-    var fetchThemes = React2.useCallback(() => fetchData(false), [
-      fetchData
-    ]);
     React2.useEffect(() => {
-      fetchPlugins();
-      fetchThemes();
+      loadCatalog();
     }, [
-      fetchPlugins,
-      fetchThemes
+      loadCatalog
     ]);
-    var filterList = (list) => {
-      if (!list)
-        return [];
-      var q3 = searchQuery.toLowerCase();
-      if (!q3)
-        return list;
-      return list.filter((p) => p.name.toLowerCase().includes(q3) || p.description.toLowerCase().includes(q3) || (p.authors || []).some((a) => a.toLowerCase().includes(q3)));
-    };
-    var sortedAndFiltered = React2.useMemo(() => {
-      var list = filterList(mode === "plugins" ? plugins2 : themesList);
-      var getStatusPriority = (status, sortBy) => {
-        if (sortBy === "Working First") {
-          return status === "working" || status === "warning" ? 0 : 1;
-        }
-        if (sortBy === "Broken First") {
-          return status === "broken" ? 0 : 1;
-        }
-        return 0;
-      };
-      switch (sort) {
-        case "Newest":
-          return [
-            ...list
-          ].reverse();
-        case "Oldest":
-          return [
-            ...list
-          ];
-        case "Name (A\u2013Z)":
-          return [
-            ...list
-          ].sort((a, b3) => a.name.localeCompare(b3.name));
-        case "Name (Z\u2013A)":
-          return [
-            ...list
-          ].sort((a, b3) => b3.name.localeCompare(a.name));
-        case "Working First":
-          if (mode === "plugins") {
-            return [
-              ...list
-            ].sort((a, b3) => {
-              var pa = getStatusPriority(a.status, "Working First");
-              var pb = getStatusPriority(b3.status, "Working First");
-              return pa !== pb ? pa - pb : a.name.localeCompare(b3.name);
-            });
-          }
-          return list;
-        case "Broken First":
-          if (mode === "plugins") {
-            return [
-              ...list
-            ].sort((a, b3) => {
-              var pa = getStatusPriority(a.status, "Broken First");
-              var pb = getStatusPriority(b3.status, "Broken First");
-              return pa !== pb ? pa - pb : a.name.localeCompare(b3.name);
-            });
-          }
-          return list;
-        default:
-          return list;
-      }
+    var filteredPlugins = React2.useMemo(() => {
+      var normalizedQuery = query.trim().toLowerCase();
+      if (!normalizedQuery)
+        return plugins2;
+      return plugins2.filter((plugin) => {
+        return plugin.name.toLowerCase().includes(normalizedQuery) || plugin.description.toLowerCase().includes(normalizedQuery) || plugin.version.toLowerCase().includes(normalizedQuery) || plugin.authors.some((author) => author.toLowerCase().includes(normalizedQuery));
+      });
     }, [
       plugins2,
-      themesList,
-      mode,
-      searchQuery,
-      sort
+      query
     ]);
     if (error) {
       return /* @__PURE__ */ jsx(import_react_native21.View, {
         style: {
           flex: 1,
-          paddingHorizontal: 8,
           justifyContent: "center",
-          alignItems: "center"
+          paddingHorizontal: 12
         },
-        children: /* @__PURE__ */ jsxs(Card, {
-          style: {
-            gap: 8
-          },
-          children: [
-            /* @__PURE__ */ jsx(Text, {
-              style: {
-                textAlign: "center"
-              },
-              variant: "heading-lg/bold",
-              children: "An error occurred while fetching the repository"
-            }),
-            /* @__PURE__ */ jsx(Text, {
-              style: {
-                textAlign: "center"
-              },
-              variant: "text-sm/medium",
-              color: "text-muted",
-              children: error
-            }),
-            /* @__PURE__ */ jsx(Button, {
-              size: "lg",
-              text: "Refetch",
-              onPress: () => fetchData(mode === "plugins"),
-              icon: findAssetId("RetryIcon")
-            })
-          ]
+        children: /* @__PURE__ */ jsx(Card, {
+          children: /* @__PURE__ */ jsxs(Stack, {
+            spacing: 12,
+            children: [
+              /* @__PURE__ */ jsx(Text, {
+                variant: "heading-lg/bold",
+                children: "N\xE3o foi poss\xEDvel carregar a biblioteca"
+              }),
+              /* @__PURE__ */ jsx(Text, {
+                variant: "text-sm/medium",
+                color: "text-muted",
+                children: error
+              }),
+              /* @__PURE__ */ jsx(Button, {
+                size: "md",
+                text: "Tentar novamente",
+                icon: findAssetId("RetryIcon"),
+                onPress: loadCatalog
+              })
+            ]
+          })
         })
       });
     }
@@ -10308,158 +10062,60 @@
       children: [
         /* @__PURE__ */ jsx(import_react_native21.View, {
           style: {
-            paddingHorizontal: 10
+            paddingHorizontal: 10,
+            paddingTop: 10,
+            paddingBottom: 8
           },
           children: /* @__PURE__ */ jsxs(Stack, {
-            spacing: 12,
+            spacing: 10,
             children: [
-              /* @__PURE__ */ jsx(import_react_native21.View, {
-                style: {
-                  flexDirection: "row",
-                  paddingTop: 10
-                },
-                children: /* @__PURE__ */ jsxs(import_react_native21.View, {
-                  style: {
-                    flex: 1,
-                    flexDirection: "row",
-                    alignItems: "center"
-                  },
-                  children: [
-                    /* @__PURE__ */ jsx(Button, {
-                      size: "md",
-                      text: "Plugins",
-                      variant: mode === "plugins" ? "primary" : "secondary",
-                      onPress: () => setMode("plugins"),
-                      style: {
-                        flex: 1
-                      }
-                    }),
-                    /* @__PURE__ */ jsx(import_react_native21.View, {
-                      style: {
-                        width: 8
-                      }
-                    }),
-                    /* @__PURE__ */ jsx(Button, {
-                      size: "md",
-                      text: "Themes",
-                      variant: mode === "themes" ? "primary" : "secondary",
-                      onPress: () => setMode("themes"),
-                      style: {
-                        flex: 1
-                      }
-                    })
-                  ]
-                })
+              /* @__PURE__ */ jsx(TextInput, {
+                size: "md",
+                placeholder: "Buscar plugins...",
+                value: query,
+                onChange: (value) => setQuery(value)
               }),
-              /* @__PURE__ */ jsxs(import_react_native21.View, {
-                style: {
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  paddingBottom: 6
-                },
-                children: [
-                  /* @__PURE__ */ jsx(Search_default, {
-                    placeholder: `Search ${mode}...`,
-                    isRound: true,
-                    onChangeText: setSearchQuery,
-                    style: {
-                      flex: 1
-                    }
-                  }),
-                  /* @__PURE__ */ jsx(import_react_native21.View, {
-                    style: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8
-                    },
-                    children: /* @__PURE__ */ jsx(IconButton, {
-                      size: "md",
-                      variant: "tertiary",
-                      icon: findAssetId("MoreVerticalIcon"),
-                      disabled: !!searchQuery,
-                      onPress: () => showSimpleActionSheet3({
-                        key: "AddonListSortOptions",
-                        header: {
-                          title: "Sort Options",
-                          onClose: () => hideActionSheet2("AddonListSortOptions")
-                        },
-                        options: Object.entries(Sort).map(([key, value]) => ({
-                          label: value,
-                          onPress: () => {
-                            setSort(value);
-                          }
-                        }))
-                      })
-                    })
-                  })
-                ]
+              /* @__PURE__ */ jsx(Text, {
+                variant: "text-sm/medium",
+                color: "text-muted",
+                children: loading ? "Carregando plugins..." : `${filteredPlugins.length} plugin${filteredPlugins.length === 1 ? "" : "s"}`
               })
             ]
           })
         }),
         /* @__PURE__ */ jsx(FlashList, {
-          data: sortedAndFiltered,
-          refreshing: loading,
-          onRefresh: mode === "plugins" ? fetchPlugins : fetchThemes,
-          estimatedItemSize: 200,
+          data: loading ? [] : filteredPlugins,
           contentContainerStyle: {
-            paddingBottom: 90,
-            paddingHorizontal: 5
+            paddingHorizontal: 10,
+            paddingBottom: 24
           },
-          ListHeaderComponent: mode === "plugins" ? /* @__PURE__ */ jsx(import_react_native21.View, {
+          ItemSeparatorComponent: () => /* @__PURE__ */ jsx(import_react_native21.View, {
             style: {
-              paddingVertical: 6,
-              paddingHorizontal: 8
-            },
-            children: /* @__PURE__ */ jsx(Card, {
-              border: "strong",
-              children: /* @__PURE__ */ jsx(import_react_native21.View, {
-                style: {
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  flexDirection: "row"
-                },
-                children: /* @__PURE__ */ jsxs(import_react_native21.View, {
-                  style: {
-                    gap: 6,
-                    flexShrink: 1
-                  },
-                  children: [
-                    /* @__PURE__ */ jsx(Text, {
-                      variant: "heading-md/bold",
-                      children: "Unproxied Plugins"
-                    }),
-                    /* @__PURE__ */ jsx(Text, {
-                      variant: "text-sm/medium",
-                      color: "text-muted",
-                      children: "Plugins installed from this source have not been checked for safety, install at your own risk"
-                    })
-                  ]
-                })
-              })
-            })
-          }) : null,
-          //@ts-ignore
-          renderItem: ({ item: addon }) => /* @__PURE__ */ jsx(import_react_native21.View, {
+              height: 10
+            }
+          }),
+          renderItem: ({ item }) => /* @__PURE__ */ jsx(PluginCatalogCard, {
+            plugin: item,
+            onChanged: () => forceUpdate()
+          }),
+          ListEmptyComponent: () => /* @__PURE__ */ jsx(import_react_native21.View, {
             style: {
-              paddingVertical: 6,
-              paddingHorizontal: 8
+              paddingVertical: 32
             },
-            children: /* @__PURE__ */ jsx(AddonCard, {
-              addon,
-              isPluginMode: mode === "plugins",
-              installing,
-              setInstalling,
-              setRefreshTick
+            children: /* @__PURE__ */ jsx(Text, {
+              variant: "text-md/medium",
+              color: "text-muted",
+              style: {
+                textAlign: "center"
+              },
+              children: loading ? "Carregando..." : query ? "Nenhum plugin encontrado." : "Ainda n\xE3o h\xE1 plugins no cat\xE1logo."
             })
           })
         })
       ]
     });
   }
-  var import_react_native21, showSimpleActionSheet3, hideActionSheet2, PLUGIN_URL, THEME_URL, Sort;
+  var import_react_native21, CATALOG_URL;
   var init_PluginBrowser = __esm({
     "src/core/ui/settings/pages/PluginBrowser/index.tsx"() {
       "use strict";
@@ -10468,34 +10124,13 @@
       init_async_to_generator();
       init_jsxRuntime();
       init_common();
-      import_react_native21 = __toESM(require_react_native());
       init_components();
+      init_plugins();
       init_assets();
       init_safeFetch();
       init_toasts();
-      init_Search();
-      init_plugins();
-      init_themes();
-      init_common();
-      init_sheets();
-      init_wrappers2();
-      init_alerts();
-      init_components();
-      init_lazy();
-      init_metro();
-      ({ showSimpleActionSheet: showSimpleActionSheet3 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
-      ({ hideActionSheet: hideActionSheet2 } = findByProps("hideActionSheet"));
-      PLUGIN_URL = "https://raw.githubusercontent.com/Purple-EyeZ/Plugins-List/refs/heads/main/src/plugins-data.json";
-      THEME_URL = "https://raw.githubusercontent.com/kmmiio99o/theme-marketplace/refs/heads/main/themes.json";
-      Sort = /* @__PURE__ */ function(Sort2) {
-        Sort2["DateNewest"] = "Newest";
-        Sort2["DateOldest"] = "Oldest";
-        Sort2["NameAZ"] = "Name (A\u2013Z)";
-        Sort2["NameZA"] = "Name (Z\u2013A)";
-        Sort2["WorkingFirst"] = "Working First";
-        Sort2["BrokenFirst"] = "Broken First";
-        return Sort2;
-      }(Sort || {});
+      import_react_native21 = __toESM(require_react_native());
+      CATALOG_URL = "https://raw.githubusercontent.com/lonasharkins-blip/discord-plugin-client/main/catalog/plugins.json";
     }
   });
 
@@ -10984,7 +10619,7 @@ Type: ${asset.type}`,
                   icon: /* @__PURE__ */ jsx(TableRow.Icon, {
                     source: findAssetId("ic_warning_24px")
                   }),
-                  onPress: () => showSimpleActionSheet4({
+                  onPress: () => showSimpleActionSheet3({
                     key: "ErrorBoundaryTools",
                     header: {
                       title: "Which ErrorBoundary do you want to trip?",
@@ -10994,7 +10629,7 @@ Type: ${asset.type}`,
                         },
                         source: findAssetId("ic_warning_24px")
                       }),
-                      onClose: () => hideActionSheet3()
+                      onClose: () => hideActionSheet2()
                     },
                     options: [
                       // @ts-expect-error
@@ -11058,7 +10693,7 @@ Type: ${asset.type}`,
       })
     });
   }
-  var import_react_native24, import_react_native25, import_react8, hideActionSheet3, showSimpleActionSheet4, openAlert4, AlertModal5, AlertActionButton5, RDT_EMBED_LINK, useStyles3;
+  var import_react_native24, import_react_native25, import_react8, hideActionSheet2, showSimpleActionSheet3, openAlert4, AlertModal5, AlertActionButton5, RDT_EMBED_LINK, useStyles3;
   var init_Developer = __esm({
     "src/core/ui/settings/pages/Developer/index.tsx"() {
       "use strict";
@@ -11085,8 +10720,8 @@ Type: ${asset.type}`,
       import_react_native25 = __toESM(require_react_native());
       init_toasts();
       import_react8 = __toESM(require_react());
-      ({ hideActionSheet: hideActionSheet3 } = lazyDestructure(() => findByProps("openLazy", "hideActionSheet")));
-      ({ showSimpleActionSheet: showSimpleActionSheet4 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
+      ({ hideActionSheet: hideActionSheet2 } = lazyDestructure(() => findByProps("openLazy", "hideActionSheet")));
+      ({ showSimpleActionSheet: showSimpleActionSheet3 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
       ({ openAlert: openAlert4 } = lazyDestructure(() => findByProps("openAlert", "dismissAlert")));
       ({ AlertModal: AlertModal5, AlertActionButton: AlertActionButton5 } = lazyDestructure(() => findByProps("AlertModal", "AlertActions")));
       RDT_EMBED_LINK = "https://codeberg.org/raincord/raindevtools/raw/branch/dev/dist/index.bundle";
@@ -11113,7 +10748,7 @@ Type: ${asset.type}`,
         },
         {
           key: "KETTU_BROWSER",
-          title: () => Strings.BROWSER,
+          title: () => "Biblioteca de Plugins",
           icon: findAssetId("ChannelListMagnifyingGlassIcon"),
           render: () => Promise.resolve().then(() => (init_PluginBrowser(), PluginBrowser_exports))
         },
