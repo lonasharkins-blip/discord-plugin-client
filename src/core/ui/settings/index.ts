@@ -20,12 +20,16 @@ export default function initSettings() {
                 title: () => Strings.BROWSER,
                 icon: findAssetId("ChannelListMagnifyingGlassIcon"),
                 render: () => import("@core/ui/settings/pages/PluginBrowser")
+            },
+            {
+                key: "BUNNY_DEVELOPER",
+                title: () => Strings.DEVELOPER,
+                icon: findAssetId("WrenchIcon"),
+                render: () => import("@core/ui/settings/pages/Developer")
             }
         ]
     });
 
-    // Mantemos estas seções vazias para compatibilidade
-    // com configurações de plugins Bunny/Revenge/Vendetta.
     registerSection({
         name: "Bunny",
         items: []
