@@ -30,17 +30,19 @@ function normalizePluginUrl(url: string) {
 
 function PluginCatalogCard({
     plugin,
-    installing,
     onChanged,
 }: {
     plugin: CatalogPlugin;
-    installing: boolean;
     onChanged: () => void;
 }) {
     const pluginUrl = normalizePluginUrl(plugin.installUrl);
     const installed = Boolean(VdPluginManager.plugins[pluginUrl]);
+    const [busy, setBusy] = React.useState(false);
 
     const install = async () => {
+        if (busy) return;
+        setBusy(true);
+
         try {
             await VdPluginManager.installPlugin(pluginUrl, true);
             showToast(`${plugin.name} instalado.`, findAssetId("Check"));
@@ -50,10 +52,15 @@ function PluginCatalogCard({
                 error instanceof Error ? error.message : String(error),
                 findAssetId("CircleXIcon-primary"),
             );
+        } finally {
+            setBusy(false);
         }
     };
 
     const remove = async () => {
+        if (busy) return;
+        setBusy(true);
+
         try {
             await VdPluginManager.removePlugin(pluginUrl);
             showToast(`${plugin.name} removido.`, findAssetId("TrashIcon"));
@@ -63,6 +70,8 @@ function PluginCatalogCard({
                 error instanceof Error ? error.message : String(error),
                 findAssetId("CircleXIcon-primary"),
             );
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -88,10 +97,10 @@ function PluginCatalogCard({
 
                     <Button
                         size="sm"
-                        text={installed ? "Remover" : installing ? "Instalando..." : "Instalar"}
+                        text={installed ? "Remover" : busy ? "Instalando..." : "Instalar"}
                         variant={installed ? "destructive" : "primary"}
-                        disabled={installing}
-                        loading={installing}
+                        disabled={busy}
+                        loading={busy}
                         icon={findAssetId(installed ? "TrashIcon" : "DownloadIcon")}
                         onPress={installed ? remove : install}
                     />
@@ -109,7 +118,6 @@ export default function PluginBrowser() {
     const [query, setQuery] = React.useState("");
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-    const [installingId, setInstallingId] = React.useState<string | null>(null);
     const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
 
     React.useEffect(() => {
@@ -213,11 +221,7 @@ export default function PluginBrowser() {
                 renderItem={({ item }: { item: CatalogPlugin }) => (
                     <PluginCatalogCard
                         plugin={item}
-                        installing={installingId === item.id}
-                        onChanged={() => {
-                            setInstallingId(null);
-                            forceUpdate();
-                        }}
+                        onChanged={() => forceUpdate()}
                     />
                 )}
                 ListEmptyComponent={() => (
