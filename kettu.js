@@ -9886,38 +9886,156 @@
   function normalizePluginUrl(url2) {
     return url2.endsWith("/") ? url2 : `${url2}/`;
   }
-  function PluginCatalogCard({ plugin, onChanged }) {
+  function PluginActions({ plugin, installing, setInstalling, onChanged }) {
     var pluginUrl = normalizePluginUrl(plugin.installUrl);
-    var installed = Boolean(VdPluginManager.plugins[pluginUrl]);
-    var [busy, setBusy] = React2.useState(false);
+    var [installed, setInstalled] = React2.useState(() => Boolean(VdPluginManager.plugins[pluginUrl]));
+    React2.useEffect(() => {
+      setInstalled(Boolean(VdPluginManager.plugins[pluginUrl]));
+    }, [
+      pluginUrl
+    ]);
     var install = () => _async_to_generator(function* () {
-      if (busy)
+      if (installing.has(pluginUrl))
         return;
-      setBusy(true);
+      setInstalling((previous) => {
+        var next = new Set(previous);
+        next.add(pluginUrl);
+        return next;
+      });
       try {
         yield VdPluginManager.installPlugin(pluginUrl, true);
-        showToast(`${plugin.name} instalado.`, findAssetId("Check"));
+        setInstalled(true);
+        showToast(`${plugin.name} instalado.`, findAssetId("CheckIcon"));
         onChanged();
       } catch (error) {
         showToast(error instanceof Error ? error.message : String(error), findAssetId("CircleXIcon-primary"));
       } finally {
-        setBusy(false);
+        setInstalling((previous) => {
+          var next = new Set(previous);
+          next.delete(pluginUrl);
+          return next;
+        });
       }
     })();
     var remove = () => _async_to_generator(function* () {
-      if (busy)
-        return;
-      setBusy(true);
       try {
         yield VdPluginManager.removePlugin(pluginUrl);
+        setInstalled(false);
         showToast(`${plugin.name} removido.`, findAssetId("TrashIcon"));
         onChanged();
       } catch (error) {
         showToast(error instanceof Error ? error.message : String(error), findAssetId("CircleXIcon-primary"));
-      } finally {
-        setBusy(false);
       }
     })();
+    var promptInstall = () => {
+      var needsWarning = plugin.status && plugin.status !== "working" || Boolean(plugin.warningMessage?.trim());
+      if (!needsWarning) {
+        void install();
+        return;
+      }
+      var warnings = [];
+      if (plugin.status === "broken") {
+        warnings.push("Este plugin est\xE1 marcado como quebrado e pode n\xE3o funcionar.");
+      } else if (plugin.status === "warning") {
+        warnings.push("Este plugin possui um aviso de compatibilidade.");
+      } else if (plugin.status && plugin.status !== "working") {
+        warnings.push(`Status informado: ${plugin.status}`);
+      }
+      if (plugin.warningMessage)
+        warnings.push(plugin.warningMessage);
+      openAlert("plugin-library-install-warning", /* @__PURE__ */ jsx(AlertModal, {
+        title: "Aten\xE7\xE3o",
+        content: "Este plugin pode n\xE3o funcionar como esperado.",
+        extraContent: /* @__PURE__ */ jsx(Text, {
+          variant: "text-sm/normal",
+          color: "text-muted",
+          children: warnings.join("\n\n")
+        }),
+        actions: /* @__PURE__ */ jsxs(AlertActions, {
+          children: [
+            /* @__PURE__ */ jsx(AlertActionButton2, {
+              text: "Instalar mesmo assim",
+              variant: "primary",
+              onPress: () => {
+                dismissAlert("plugin-library-install-warning");
+                void install();
+              }
+            }),
+            /* @__PURE__ */ jsx(AlertActionButton2, {
+              text: "Cancelar",
+              variant: "secondary",
+              onPress: () => dismissAlert("plugin-library-install-warning")
+            })
+          ]
+        })
+      }));
+    };
+    var openMenu = () => {
+      var key = `plugin-library-menu-${pluginUrl}`;
+      showSheet(key, () => /* @__PURE__ */ jsx(ActionSheet, {
+        children: /* @__PURE__ */ jsxs(TableRowGroup, {
+          title: "Plugin",
+          children: [
+            /* @__PURE__ */ jsx(TableRow, {
+              label: "Copiar link de instala\xE7\xE3o",
+              icon: /* @__PURE__ */ jsx(TableRow.Icon, {
+                source: findAssetId("CopyIcon")
+              }),
+              onPress: () => {
+                clipboard.setString(plugin.installUrl);
+                hideSheet(key);
+              }
+            }),
+            plugin.sourceUrl ? /* @__PURE__ */ jsx(TableRow, {
+              label: "Copiar c\xF3digo-fonte",
+              icon: /* @__PURE__ */ jsx(TableRow.Icon, {
+                source: findAssetId("LinkIcon")
+              }),
+              onPress: () => {
+                clipboard.setString(plugin.sourceUrl);
+                hideSheet(key);
+              }
+            }) : null
+          ]
+        })
+      }));
+    };
+    var isInstalling = installing.has(pluginUrl);
+    return /* @__PURE__ */ jsxs(Stack, {
+      spacing: 8,
+      direction: "horizontal",
+      children: [
+        /* @__PURE__ */ jsx(IconButton, {
+          size: "sm",
+          variant: "secondary",
+          icon: findAssetId("MoreHorizontalIcon"),
+          onPress: openMenu
+        }),
+        /* @__PURE__ */ jsx(Button, {
+          size: "sm",
+          loading: isInstalling,
+          disabled: isInstalling,
+          text: installed ? "Remover" : isInstalling ? "Instalando..." : "Instalar",
+          variant: installed ? "destructive" : "primary",
+          icon: findAssetId(installed ? "TrashIcon" : "DownloadIcon"),
+          onPress: installed ? remove : promptInstall
+        })
+      ]
+    });
+  }
+  function PluginCard2({ plugin, installing, setInstalling, onChanged }) {
+    var statusText = plugin.status || "unknown";
+    var statusColor = "text-normal";
+    if (plugin.status === "working") {
+      statusText = "funcionando";
+      statusColor = "#4ADE80";
+    } else if (plugin.status === "warning") {
+      statusText = "aten\xE7\xE3o";
+      statusColor = "#F59E0B";
+    } else if (plugin.status === "broken") {
+      statusText = "quebrado";
+      statusColor = "#EF4444";
+    }
     return /* @__PURE__ */ jsx(Card, {
       children: /* @__PURE__ */ jsxs(Stack, {
         spacing: 12,
@@ -9925,9 +10043,9 @@
           /* @__PURE__ */ jsxs(import_react_native21.View, {
             style: {
               flexDirection: "row",
-              alignItems: "flex-start",
               justifyContent: "space-between",
-              gap: 12
+              alignItems: "flex-start",
+              gap: 10
             },
             children: [
               /* @__PURE__ */ jsxs(import_react_native21.View, {
@@ -9937,8 +10055,8 @@
                 },
                 children: [
                   /* @__PURE__ */ jsx(Text, {
-                    variant: "heading-lg/semibold",
                     numberOfLines: 1,
+                    variant: "heading-lg/semibold",
                     children: plugin.name
                   }),
                   /* @__PURE__ */ jsxs(Text, {
@@ -9946,28 +10064,41 @@
                     color: "text-muted",
                     children: [
                       "por ",
-                      plugin.authors.join(", "),
-                      " \u2022 v",
-                      plugin.version
+                      plugin.authors?.join(", ") || "Desconhecido"
+                    ]
+                  }),
+                  /* @__PURE__ */ jsxs(Text, {
+                    variant: "text-sm/semibold",
+                    style: {
+                      color: statusColor
+                    },
+                    children: [
+                      "Status: ",
+                      statusText
                     ]
                   })
                 ]
               }),
-              /* @__PURE__ */ jsx(Button, {
-                size: "sm",
-                text: installed ? "Remover" : busy ? "Instalando..." : "Instalar",
-                variant: installed ? "destructive" : "primary",
-                disabled: busy,
-                loading: busy,
-                icon: findAssetId(installed ? "TrashIcon" : "DownloadIcon"),
-                onPress: installed ? remove : install
+              /* @__PURE__ */ jsx(PluginActions, {
+                plugin,
+                installing,
+                setInstalling,
+                onChanged
               })
             ]
           }),
           /* @__PURE__ */ jsx(Text, {
             variant: "text-md/medium",
             children: plugin.description
-          })
+          }),
+          plugin.warningMessage ? /* @__PURE__ */ jsxs(Text, {
+            variant: "text-sm/medium",
+            color: "text-muted",
+            children: [
+              "Aviso: ",
+              plugin.warningMessage
+            ]
+          }) : null
         ]
       })
     });
@@ -9975,9 +10106,11 @@
   function PluginBrowser() {
     var navigation2 = NavigationNative.useNavigation();
     var [plugins2, setPlugins] = React2.useState([]);
-    var [query, setQuery] = React2.useState("");
     var [loading, setLoading] = React2.useState(true);
     var [error, setError] = React2.useState(null);
+    var [searchQuery, setSearchQuery] = React2.useState("");
+    var [installing, setInstalling] = React2.useState(/* @__PURE__ */ new Set());
+    var [sort, setSort] = React2.useState("Mais recentes");
     var [, forceUpdate] = React2.useReducer((value) => value + 1, 0);
     React2.useEffect(() => {
       navigation2.setOptions({
@@ -9986,21 +10119,19 @@
     }, [
       navigation2
     ]);
-    var loadCatalog = React2.useCallback(() => _async_to_generator(function* () {
+    var fetchPlugins = React2.useCallback(() => _async_to_generator(function* () {
       setLoading(true);
       setError(null);
       try {
-        var response = yield safeFetch(CATALOG_URL, {
+        var response = yield safeFetch(PLUGIN_URL, {
           cache: "no-store"
         });
         if (!response.ok) {
-          throw new Error(`Falha ao carregar cat\xE1logo: HTTP ${response.status}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         var data = yield response.json();
-        if (!Array.isArray(data)) {
-          throw new Error("O cat\xE1logo de plugins possui um formato inv\xE1lido.");
-        }
-        setPlugins(data);
+        var list = Array.isArray(data) ? data : Array.isArray(data?.OFFICIAL_PLUGINS) ? data.OFFICIAL_PLUGINS : [];
+        setPlugins(list);
       } catch (err) {
         setPlugins([]);
         setError(err instanceof Error ? err.message : String(err));
@@ -10009,31 +10140,62 @@
       }
     })(), []);
     React2.useEffect(() => {
-      loadCatalog();
+      void fetchPlugins();
     }, [
-      loadCatalog
+      fetchPlugins
     ]);
     var filteredPlugins = React2.useMemo(() => {
-      var normalizedQuery = query.trim().toLowerCase();
-      if (!normalizedQuery)
-        return plugins2;
-      return plugins2.filter((plugin) => {
-        return plugin.name.toLowerCase().includes(normalizedQuery) || plugin.description.toLowerCase().includes(normalizedQuery) || plugin.version.toLowerCase().includes(normalizedQuery) || plugin.authors.some((author) => author.toLowerCase().includes(normalizedQuery));
-      });
+      var query = searchQuery.trim().toLowerCase();
+      var list = query ? plugins2.filter((plugin) => plugin.name.toLowerCase().includes(query) || plugin.description.toLowerCase().includes(query) || plugin.authors?.some((author) => author.toLowerCase().includes(query))) : plugins2;
+      var statusPriority = (plugin, brokenFirst = false) => {
+        if (brokenFirst)
+          return plugin.status === "broken" ? 0 : 1;
+        return plugin.status === "working" || plugin.status === "warning" ? 0 : 1;
+      };
+      switch (sort) {
+        case "Mais recentes":
+          return [
+            ...list
+          ].reverse();
+        case "Mais antigos":
+          return [
+            ...list
+          ];
+        case "Nome (A\u2013Z)":
+          return [
+            ...list
+          ].sort((a, b3) => a.name.localeCompare(b3.name));
+        case "Nome (Z\u2013A)":
+          return [
+            ...list
+          ].sort((a, b3) => b3.name.localeCompare(a.name));
+        case "Funcionando primeiro":
+          return [
+            ...list
+          ].sort((a, b3) => statusPriority(a) - statusPriority(b3) || a.name.localeCompare(b3.name));
+        case "Quebrados primeiro":
+          return [
+            ...list
+          ].sort((a, b3) => statusPriority(a, true) - statusPriority(b3, true) || a.name.localeCompare(b3.name));
+        default:
+          return list;
+      }
     }, [
       plugins2,
-      query
+      searchQuery,
+      sort
     ]);
     if (error) {
       return /* @__PURE__ */ jsx(import_react_native21.View, {
         style: {
           flex: 1,
           justifyContent: "center",
+          alignItems: "center",
           paddingHorizontal: 12
         },
         children: /* @__PURE__ */ jsx(Card, {
           children: /* @__PURE__ */ jsxs(Stack, {
-            spacing: 12,
+            spacing: 10,
             children: [
               /* @__PURE__ */ jsx(Text, {
                 variant: "heading-lg/bold",
@@ -10048,7 +10210,7 @@
                 size: "md",
                 text: "Tentar novamente",
                 icon: findAssetId("RetryIcon"),
-                onPress: loadCatalog
+                onPress: fetchPlugins
               })
             ]
           })
@@ -10060,62 +10222,96 @@
         flex: 1
       },
       children: [
-        /* @__PURE__ */ jsx(import_react_native21.View, {
+        /* @__PURE__ */ jsxs(import_react_native21.View, {
           style: {
             paddingHorizontal: 10,
             paddingTop: 10,
-            paddingBottom: 8
+            paddingBottom: 6
           },
-          children: /* @__PURE__ */ jsxs(Stack, {
-            spacing: 10,
-            children: [
-              /* @__PURE__ */ jsx(TextInput, {
-                size: "md",
-                placeholder: "Buscar plugins...",
-                value: query,
-                onChange: (value) => setQuery(value)
-              }),
-              /* @__PURE__ */ jsx(Text, {
-                variant: "text-sm/medium",
-                color: "text-muted",
-                children: loading ? "Carregando plugins..." : `${filteredPlugins.length} plugin${filteredPlugins.length === 1 ? "" : "s"}`
-              })
-            ]
-          })
+          children: [
+            /* @__PURE__ */ jsxs(import_react_native21.View, {
+              style: {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8
+              },
+              children: [
+                /* @__PURE__ */ jsx(Search_default, {
+                  placeholder: "Buscar plugins...",
+                  isRound: true,
+                  onChangeText: setSearchQuery,
+                  style: {
+                    flex: 1
+                  }
+                }),
+                /* @__PURE__ */ jsx(IconButton, {
+                  size: "md",
+                  variant: "tertiary",
+                  icon: findAssetId("MoreVerticalIcon"),
+                  onPress: () => showSimpleActionSheet3({
+                    key: "PluginLibrarySortOptions",
+                    header: {
+                      title: "Ordenar plugins",
+                      onClose: () => hideActionSheet2("PluginLibrarySortOptions")
+                    },
+                    options: Object.values(Sort).map((value) => ({
+                      label: value,
+                      onPress: () => setSort(value)
+                    }))
+                  })
+                })
+              ]
+            }),
+            /* @__PURE__ */ jsx(Text, {
+              variant: "text-sm/medium",
+              color: "text-muted",
+              style: {
+                marginTop: 8
+              },
+              children: loading ? "Carregando plugins..." : `${filteredPlugins.length} plugin${filteredPlugins.length === 1 ? "" : "s"}`
+            })
+          ]
         }),
         /* @__PURE__ */ jsx(FlashList, {
           data: loading ? [] : filteredPlugins,
+          refreshing: loading,
+          onRefresh: fetchPlugins,
+          estimatedItemSize: 200,
           contentContainerStyle: {
-            paddingHorizontal: 10,
-            paddingBottom: 24
+            paddingBottom: 90,
+            paddingHorizontal: 5
           },
-          ItemSeparatorComponent: () => /* @__PURE__ */ jsx(import_react_native21.View, {
+          ListHeaderComponent: /* @__PURE__ */ jsx(import_react_native21.View, {
             style: {
-              height: 10
-            }
-          }),
-          renderItem: ({ item }) => /* @__PURE__ */ jsx(PluginCatalogCard, {
-            plugin: item,
-            onChanged: () => forceUpdate()
-          }),
-          ListEmptyComponent: () => /* @__PURE__ */ jsx(import_react_native21.View, {
-            style: {
-              paddingVertical: 32
+              paddingVertical: 6,
+              paddingHorizontal: 8
             },
-            children: /* @__PURE__ */ jsx(Text, {
-              variant: "text-md/medium",
-              color: "text-muted",
-              style: {
-                textAlign: "center"
-              },
-              children: loading ? "Carregando..." : query ? "Nenhum plugin encontrado." : "Ainda n\xE3o h\xE1 plugins no cat\xE1logo."
+            children: /* @__PURE__ */ jsx(Card, {
+              border: "strong",
+              children: /* @__PURE__ */ jsx(Text, {
+                variant: "text-sm/medium",
+                color: "text-muted",
+                children: "Esta biblioteca re\xFAne plugins de fontes externas. Instale apenas plugins em que voc\xEA confia."
+              })
+            })
+          }),
+          renderItem: ({ item }) => /* @__PURE__ */ jsx(import_react_native21.View, {
+            style: {
+              paddingVertical: 6,
+              paddingHorizontal: 8
+            },
+            children: /* @__PURE__ */ jsx(PluginCard2, {
+              plugin: item,
+              installing,
+              setInstalling,
+              onChanged: forceUpdate
             })
           })
         })
       ]
     });
   }
-  var import_react_native21, CATALOG_URL;
+  var import_react_native21, showSimpleActionSheet3, hideActionSheet2, PLUGIN_URL, Sort;
   var init_PluginBrowser = __esm({
     "src/core/ui/settings/pages/PluginBrowser/index.tsx"() {
       "use strict";
@@ -10126,11 +10322,28 @@
       init_common();
       init_components();
       init_plugins();
+      init_wrappers2();
+      init_alerts();
+      init_sheets();
       init_assets();
       init_safeFetch();
+      init_lazy();
+      init_metro();
+      init_Search();
       init_toasts();
       import_react_native21 = __toESM(require_react_native());
-      CATALOG_URL = "https://raw.githubusercontent.com/lonasharkins-blip/discord-plugin-client/main/catalog/plugins.json";
+      ({ showSimpleActionSheet: showSimpleActionSheet3 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
+      ({ hideActionSheet: hideActionSheet2 } = findByProps("hideActionSheet"));
+      PLUGIN_URL = "https://raw.githubusercontent.com/Purple-EyeZ/Plugins-List/refs/heads/main/src/plugins-data.json";
+      Sort = /* @__PURE__ */ function(Sort2) {
+        Sort2["Newest"] = "Mais recentes";
+        Sort2["Oldest"] = "Mais antigos";
+        Sort2["NameAZ"] = "Nome (A\u2013Z)";
+        Sort2["NameZA"] = "Nome (Z\u2013A)";
+        Sort2["WorkingFirst"] = "Funcionando primeiro";
+        Sort2["BrokenFirst"] = "Quebrados primeiro";
+        return Sort2;
+      }(Sort || {});
     }
   });
 
@@ -10619,7 +10832,7 @@ Type: ${asset.type}`,
                   icon: /* @__PURE__ */ jsx(TableRow.Icon, {
                     source: findAssetId("ic_warning_24px")
                   }),
-                  onPress: () => showSimpleActionSheet3({
+                  onPress: () => showSimpleActionSheet4({
                     key: "ErrorBoundaryTools",
                     header: {
                       title: "Which ErrorBoundary do you want to trip?",
@@ -10629,7 +10842,7 @@ Type: ${asset.type}`,
                         },
                         source: findAssetId("ic_warning_24px")
                       }),
-                      onClose: () => hideActionSheet2()
+                      onClose: () => hideActionSheet3()
                     },
                     options: [
                       // @ts-expect-error
@@ -10693,7 +10906,7 @@ Type: ${asset.type}`,
       })
     });
   }
-  var import_react_native24, import_react_native25, import_react8, hideActionSheet2, showSimpleActionSheet3, openAlert4, AlertModal5, AlertActionButton5, RDT_EMBED_LINK, useStyles3;
+  var import_react_native24, import_react_native25, import_react8, hideActionSheet3, showSimpleActionSheet4, openAlert4, AlertModal5, AlertActionButton5, RDT_EMBED_LINK, useStyles3;
   var init_Developer = __esm({
     "src/core/ui/settings/pages/Developer/index.tsx"() {
       "use strict";
@@ -10720,8 +10933,8 @@ Type: ${asset.type}`,
       import_react_native25 = __toESM(require_react_native());
       init_toasts();
       import_react8 = __toESM(require_react());
-      ({ hideActionSheet: hideActionSheet2 } = lazyDestructure(() => findByProps("openLazy", "hideActionSheet")));
-      ({ showSimpleActionSheet: showSimpleActionSheet3 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
+      ({ hideActionSheet: hideActionSheet3 } = lazyDestructure(() => findByProps("openLazy", "hideActionSheet")));
+      ({ showSimpleActionSheet: showSimpleActionSheet4 } = lazyDestructure(() => findByProps("showSimpleActionSheet")));
       ({ openAlert: openAlert4 } = lazyDestructure(() => findByProps("openAlert", "dismissAlert")));
       ({ AlertModal: AlertModal5, AlertActionButton: AlertActionButton5 } = lazyDestructure(() => findByProps("AlertModal", "AlertActions")));
       RDT_EMBED_LINK = "https://codeberg.org/raincord/raindevtools/raw/branch/dev/dist/index.bundle";
