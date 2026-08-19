@@ -1,4 +1,3 @@
-import { PupuIcon } from "@core/ui/settings";
 import {
   disablePlugin,
   enablePlugin,
@@ -21,10 +20,7 @@ export default function unifyBunnyPlugin(
     authors: manifest.display.authors,
 
     getBadges() {
-      return [
-        { source: { uri: PupuIcon } },
-        // { source: findAssetId("CheckmarkLargeBoldIcon")! }
-      ];
+      return [];
     },
     isEnabled: () => isPluginEnabled(manifest.id),
     isInstalled: () => manifest.id in pluginSettings,
@@ -36,11 +32,9 @@ export default function unifyBunnyPlugin(
         start ? enablePlugin(manifest.id, true) : disablePlugin(manifest.id);
       } catch (e) {
         console.error(e);
-        // showToast("Failed to toggle plugin " + e, findAssetId("Small"));
       }
     },
     resolveSheetComponent() {
-      // Return a Promise resolving to the sheet component for interface consistency
       return Promise.resolve({
         default: require("../sheets/PluginInfoActionSheet").default,
       });
