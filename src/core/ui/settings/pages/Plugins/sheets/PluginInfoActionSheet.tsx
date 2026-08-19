@@ -1,17 +1,24 @@
-import { hideSheet } from "@lib/ui/sheets";
-import { ActionSheet, Card, IconButton, Text } from "@metro/common/components";
-import { clipboard } from "@metro/common";
-import { showToast } from "@lib/ui/toasts";
 import { showConfirmationAlert } from "@core/vendetta/alerts";
 import { VdPluginManager } from "@core/vendetta/plugins";
 import { purgeStorage as purgeVdStorage } from "@core/vendetta/storage";
-import { purgeStorage } from "@lib/api/storage";
+import {
+  isCorePlugin,
+  registeredPlugins,
+  refreshPlugin,
+  uninstallPlugin,
+  updateAndWritePlugin,
+} from "@lib/addons/plugins";
 import { findAssetId } from "@lib/api/assets";
+import { purgeStorage } from "@lib/api/storage";
+import { hideSheet } from "@lib/ui/sheets";
+import { showToast } from "@lib/ui/toasts";
+import { clipboard } from "@metro/common";
+import { ActionSheet, Card, IconButton, Text } from "@metro/common/components";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
-import TitleComponent from "./TitleComponent";
+
 import { PluginInfoActionSheetProps } from "./common";
-import { semanticColors } from "@lib/ui/color";
+import TitleComponent from "./TitleComponent";
 
 function PluginInfoIconButton(props) {
   const { onPress } = props;
@@ -29,48 +36,48 @@ export default function PluginInfoActionSheet({
   plugin.usePluginState();
   const [loading, setLoading] = useState(false);
 
-  // Determine plugin type
-  const isVendettaPlugin = plugin.id.includes("/");
-  const isCorePlugin =
-    plugin.id.startsWith("bunny.") || plugin.id.startsWith("vendetta.");
+  const isUrlPlugin = plugin.id.includes("/");
+  const isInternalPlugin = !isUrlPlugin && isCorePlugin(plugin.id);
 
-  const copyPluginUrl = () => {
-    let url = plugin.id;
-    if (isVendettaPlugin) {
-      url = plugin.id;
-    } else {
-      try {
-        const pluginAny = plugin;
-        const repoUrl =
-        //@ts-expect-error
-          pluginAny._manifest?.parentRepository ||
-          //@ts-expect-error
-          pluginAny.manifest?.parentRepository;
-        url = repoUrl ? `${repoUrl}/builds/${plugin.id}` : plugin.id;
-      } catch (e) {
-        url = plugin.id;
-      }
-    }
-    clipboard.setString(url);
-    showToast("Copied to clipboard!", findAssetId("toast_copy_link"));
+  const getRepositoryUrl = () => {
+    const manifest = registeredPlugins.get(plugin.id) as any;
+    return manifest?.parentRepository as string | undefined;
   };
 
-  const refetchPlugin = async () => {
+  const copyPluginUrl = () => {
+    const url = isUrlPlugin ? plugin.id : getRepositoryUrl() ?? plugin.id;
+    clipboard.setString(url);
+    showToast("URL copiada", findAssetId("toast_copy_link"));
+  };
+
+  const updatePlugin = async () => {
     setLoading(true);
+
     try {
-      if (isVendettaPlugin) {
-        const vdPlugin = VdPluginManager.plugins[plugin.id];
-        if (vdPlugin.enabled) VdPluginManager.stopPlugin(plugin.id, false);
+      if (isUrlPlugin) {
+        const current = VdPluginManager.plugins[plugin.id];
+        const wasEnabled = current?.enabled ?? false;
+
+        if (wasEnabled) VdPluginManager.stopPlugin(plugin.id, false);
         await VdPluginManager.fetchPlugin(plugin.id);
-        if (vdPlugin.enabled) await VdPluginManager.startPlugin(plugin.id);
-        showToast("Plugin refreshed successfully");
+        if (wasEnabled) await VdPluginManager.startPlugin(plugin.id);
       } else {
-        // For Bunny plugins
-        // If you have a refreshPlugin function, call it here
-        showToast("Plugin refreshed successfully");
+        const repoUrl = getRepositoryUrl();
+        if (!repoUrl) throw new Error("Fonte do plugin não encontrada");
+
+        if (plugin.isEnabled()) {
+          await refreshPlugin(plugin.id, repoUrl);
+        } else {
+          await updateAndWritePlugin(repoUrl, plugin.id, true);
+        }
       }
+
+      showToast("Plugin atualizado", findAssetId("Check"));
     } catch (e) {
-      showToast("Failed to refresh plugin");
+      showToast(
+        `Falha ao atualizar: ${e instanceof Error ? e.message : String(e)}`,
+        findAssetId("Small"),
+      );
     } finally {
       setLoading(false);
     }
@@ -78,55 +85,62 @@ export default function PluginInfoActionSheet({
 
   const clearPluginData = () => {
     showConfirmationAlert({
-      title: "Clear Data",
+      title: "Limpar dados",
       content:
-        "Are you sure you want to clear all data for this plugin? This action cannot be undone.",
-      confirmText: "Clear",
+        "Isso apaga as configurações e os dados salvos deste plugin. Deseja continuar?",
+      confirmText: "Limpar",
       confirmColor: "red",
-      cancelText: "Cancel",
+      cancelText: "Cancelar",
       onConfirm: async () => {
         hideSheet("PluginInfoActionSheet");
+
         try {
-          if (isVendettaPlugin) {
-            const vdPlugin = VdPluginManager.plugins[plugin.id];
-            if (vdPlugin.enabled) VdPluginManager.stopPlugin(plugin.id, false);
+          if (isUrlPlugin) {
+            const current = VdPluginManager.plugins[plugin.id];
+            const wasEnabled = current?.enabled ?? false;
+
+            if (wasEnabled) VdPluginManager.stopPlugin(plugin.id, false);
             await purgeVdStorage(plugin.id);
-            if (vdPlugin.enabled) await VdPluginManager.startPlugin(plugin.id);
+            if (wasEnabled) await VdPluginManager.startPlugin(plugin.id);
           } else {
             await purgeStorage(`plugins/storage/${plugin.id}.json`);
           }
-          showToast("Plugin data cleared successfully");
+
+          showToast("Dados do plugin apagados", findAssetId("Check"));
         } catch (e) {
-          showToast("Failed to clear plugin data");
+          showToast("Não foi possível limpar os dados", findAssetId("Small"));
         }
       },
     });
   };
 
-  const uninstallPluginHandler = () => {
-    if (isCorePlugin) {
-      showToast("Core plugins cannot be uninstalled");
+  const removePlugin = () => {
+    if (isInternalPlugin) {
+      showToast("Plugins internos não podem ser removidos", findAssetId("Small"));
       return;
     }
+
     showConfirmationAlert({
-      title: "Uninstall Plugin",
-      content:
-        "Are you sure you want to uninstall this plugin? This action cannot be undone.",
-      confirmText: "Uninstall",
+      title: "Remover plugin",
+      content: `Deseja remover “${plugin.name}”?`,
+      confirmText: "Remover",
       confirmColor: "red",
-      cancelText: "Cancel",
+      cancelText: "Cancelar",
       onConfirm: async () => {
         hideSheet("PluginInfoActionSheet");
+
         try {
-          if (isVendettaPlugin) {
+          if (isUrlPlugin) {
             await VdPluginManager.removePlugin(plugin.id);
           } else {
-            // If you have an uninstallPlugin function, call it here
+            await uninstallPlugin(plugin.id);
           }
-          showToast("Plugin uninstalled successfully");
+
+          showToast("Plugin removido", findAssetId("Check"));
         } catch (e) {
           showToast(
-            `Failed to uninstall plugin: ${e instanceof Error ? e.message : String(e)}`,
+            `Falha ao remover: ${e instanceof Error ? e.message : String(e)}`,
+            findAssetId("Small"),
           );
         }
       },
@@ -148,6 +162,7 @@ export default function PluginInfoActionSheet({
         >
           <TitleComponent plugin={plugin} />
         </View>
+
         <View
           style={{
             flexDirection: "row",
@@ -159,7 +174,7 @@ export default function PluginInfoActionSheet({
           }}
         >
           <PluginInfoIconButton
-            label="Configure"
+            label="Configurar"
             variant="secondary"
             disabled={!plugin.getPluginSettingsComponent()}
             icon={findAssetId("WrenchIcon")}
@@ -170,48 +185,50 @@ export default function PluginInfoActionSheet({
               });
             }}
           />
-          {!isCorePlugin && (
-          <PluginInfoIconButton
-            label="Refetch"
-            variant="secondary"
-            icon={findAssetId("RetryIcon")}
-            onPress={refetchPlugin}
-            disabled={loading}
-          />
+
+          {!isInternalPlugin && (
+            <PluginInfoIconButton
+              label="Atualizar"
+              variant="secondary"
+              icon={findAssetId("RetryIcon")}
+              onPress={updatePlugin}
+              disabled={loading}
+            />
           )}
-          {!isCorePlugin && (
-          <PluginInfoIconButton
-            label="Copy URL"
-            variant="secondary"
-            icon={findAssetId("LinkIcon")}
-            onPress={copyPluginUrl}
-          />
+
+          {!isInternalPlugin && (
+            <PluginInfoIconButton
+              label="Copiar URL"
+              variant="secondary"
+              icon={findAssetId("LinkIcon")}
+              onPress={copyPluginUrl}
+            />
           )}
+
           <PluginInfoIconButton
-            label="Clear Data"
+            label="Limpar dados"
             variant="secondary"
             icon={findAssetId("FileIcon")}
             onPress={clearPluginData}
           />
-          {!isCorePlugin && (
+
+          {!isInternalPlugin && (
             <PluginInfoIconButton
-              label="Uninstall"
+              label="Remover"
               variant="secondary"
               icon={findAssetId("TrashIcon")}
-              onPress={uninstallPluginHandler}
+              onPress={removePlugin}
             />
           )}
         </View>
+
         <Card>
           <Text
             variant="text-md/semibold"
             color="text-primary"
-            style={{
-              marginBottom: 4,
-              color: "text-strong",
-            }}
+            style={{ marginBottom: 4 }}
           >
-            Description
+            Descrição
           </Text>
           <Text variant="text-md/medium">{plugin.description}</Text>
         </Card>
