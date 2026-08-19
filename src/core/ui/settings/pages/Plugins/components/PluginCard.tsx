@@ -2,6 +2,7 @@ import { CardWrapper } from "@core/ui/components/AddonCard";
 import { UnifiedPluginModel } from "@core/ui/settings/pages/Plugins/models";
 import { usePluginCardStyles } from "@core/ui/settings/pages/Plugins/usePluginCardStyles";
 import { findAssetId } from "@lib/api/assets";
+import { isCorePlugin } from "@lib/addons/plugins";
 import { NavigationNative, tokens } from "@metro/common";
 import {
   Card,
@@ -12,9 +13,8 @@ import {
 } from "@metro/common/components";
 import { showSheet } from "@ui/sheets";
 import chroma from "chroma-js";
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useMemo, useReducer } from "react";
 import { Image, View } from "react-native";
-import { isCorePlugin } from "@lib/addons/plugins";
 
 const CardContext = createContext<{
   plugin: UnifiedPluginModel;
@@ -30,7 +30,6 @@ function Title() {
   const styles = usePluginCardStyles();
   const { plugin, result } = useCardContext();
 
-  // could be empty if the plugin name is irrelevant!
   const highlightedNode = result[0].highlight((m, i) => (
     <Text key={i} style={{ backgroundColor: getHighlightColor() }}>
       {m}
@@ -39,61 +38,42 @@ function Title() {
 
   const icon = plugin.icon && findAssetId(plugin.icon);
 
-  const textNode = (
-    <Text numberOfLines={1} variant="heading-lg/semibold">
-      {highlightedNode.length ? highlightedNode : plugin.name}
-    </Text>
-  );
-
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
       {icon && <Image style={styles.smallIcon} source={icon} />}
-      {textNode}
+      <Text numberOfLines={1} variant="heading-lg/semibold">
+        {highlightedNode.length ? highlightedNode : plugin.name}
+      </Text>
     </View>
   );
 }
 
 function Authors() {
   const { plugin, result } = useCardContext();
-  const styles = usePluginCardStyles();
 
   if (!plugin.authors) return null;
 
-  // could be empty if the author(s) are irrelevant with the search!
   const highlightedNode = result[2].highlight((m, i) => (
     <Text key={i} style={{ backgroundColor: getHighlightColor() }}>
       {m}
     </Text>
   ));
 
-  const badges = plugin.getBadges();
   const authorText =
     highlightedNode.length > 0
       ? highlightedNode
       : plugin.authors.map((a) => a.name).join(", ");
 
   return (
-    <View
-      style={{ flexDirection: "row", flexWrap: "wrap", flexShrink: 1, gap: 4 }}
-    >
-      <Text variant="text-sm/semibold" color="text-muted">
-        by {authorText}
-      </Text>
-      {badges.length > 0 && (
-        <View style={styles.badgesContainer}>
-          {badges.map((b, i) => (
-            <Image key={i} source={b.source} style={styles.badgeIcon} />
-          ))}
-        </View>
-      )}
-    </View>
+    <Text variant="text-sm/semibold" color="text-muted">
+      por {authorText}
+    </Text>
   );
 }
 
 function Description() {
   const { plugin, result } = useCardContext();
 
-  // could be empty if the description is irrelevant with the search!
   const highlightedNode = result[1].highlight((m, i) => (
     <Text key={i} style={{ backgroundColor: getHighlightColor() }}>
       {m}
@@ -107,7 +87,7 @@ function Description() {
   );
 }
 
-const Actions = () => {
+function Actions() {
   const { plugin } = useCardContext();
   const navigation = NavigationNative.useNavigation();
 
@@ -139,7 +119,7 @@ const Actions = () => {
       />
     </View>
   );
-};
+}
 
 export default function PluginCard({
   result,
@@ -147,41 +127,40 @@ export default function PluginCard({
 }: CardWrapper<UnifiedPluginModel>) {
   plugin.usePluginState();
 
-  
-const [, forceUpdate] = React.useReducer(() => ({}), 0);
-const cardContextValue = useMemo(() => ({ plugin, result }), [plugin, result]);
-    const core = isCorePlugin(plugin.id);
+  const [, forceUpdate] = useReducer((value: number) => value + 1, 0);
+  const cardContextValue = useMemo(() => ({ plugin, result }), [plugin, result]);
+  const core = isCorePlugin(plugin.id);
 
-    return (
-        <CardContext.Provider value={cardContextValue}>
-            <Card>
-                <Stack spacing={16}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                        <View style={{ flexShrink: 1 }}>
-                            <Title />
-                            <Authors />
-                        </View>
-                        <View>
-                            <Stack spacing={12} direction="horizontal">
-                                <Actions />
-                                <View style={core ? { opacity: 0.5 } : undefined}>
-                                    <TableSwitch
-                                        value={core ? true : plugin.isEnabled()}
-                                        disabled={core}
-                                        onValueChange={(v: boolean) => {
-                                            if (!core) {
-                                                plugin.toggle(v);
-                                                forceUpdate();
-                                            }
-                                        }}
-                                    />
-                                </View>
-                            </Stack>
-                        </View>
-                    </View>
-                    <Description />
-                </Stack>
-            </Card>
-        </CardContext.Provider>
-    );
+  return (
+    <CardContext.Provider value={cardContextValue}>
+      <Card>
+        <Stack spacing={16}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={{ flexShrink: 1 }}>
+              <Title />
+              <Authors />
+            </View>
+            <View>
+              <Stack spacing={12} direction="horizontal">
+                <Actions />
+                <View style={core ? { opacity: 0.5 } : undefined}>
+                  <TableSwitch
+                    value={core ? true : plugin.isEnabled()}
+                    disabled={core}
+                    onValueChange={(enabled: boolean) => {
+                      if (!core) {
+                        plugin.toggle(enabled);
+                        forceUpdate();
+                      }
+                    }}
+                  />
+                </View>
+              </Stack>
+            </View>
+          </View>
+          <Description />
+        </Stack>
+      </Card>
+    </CardContext.Provider>
+  );
 }
