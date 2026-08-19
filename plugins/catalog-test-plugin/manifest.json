@@ -1,0 +1,12 @@
+{
+  "name": "Plugin de Teste",
+  "description": "Plugin simples para testar a instalação pela Biblioteca.",
+  "authors": [
+    {
+      "name": "Lona"
+    }
+  ],
+  "version": "1.0.0",
+  "main": "index.js",
+  "hash": "catalog-test-plugin-1.0.0"
+}
