@@ -1,0 +1,10 @@
+[
+  {
+    "id": "catalog-test-plugin",
+    "name": "Plugin de Teste",
+    "description": "Plugin simples para confirmar que a Biblioteca consegue instalar plugins diretamente.",
+    "authors": ["Lona"],
+    "version": "1.0.0",
+    "installUrl": "https://raw.githubusercontent.com/lonasharkins-blip/discord-plugin-client/main/plugins/catalog-test-plugin/"
+  }
+]
