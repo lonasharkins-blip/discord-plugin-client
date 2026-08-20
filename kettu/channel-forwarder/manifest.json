@@ -1,0 +1,10 @@
+{
+  "name": "Channel Forwarder",
+  "description": "Encaminha automaticamente novas mensagens de um canal para outro canal usando o Kettu.",
+  "authors": [{ "name": "Você" }],
+  "main": "index.js",
+  "hash": "6585da17c92ea15452d4e7b62250f3fe902f5576162b0eae4a25df2abb887a70",
+  "vendetta": {
+    "icon": "ChatIcon"
+  }
+}
