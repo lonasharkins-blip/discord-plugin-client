@@ -1,9 +1,9 @@
 {
   "name": "Channel Forwarder",
-  "description": "Encaminha automaticamente novas mensagens de um canal para outro canal usando o Kettu.",
+  "description": "Encaminha mensagens existentes e novas de um canal para outro usando o Forward nativo do Discord.",
   "authors": [{ "name": "Lona" }],
   "main": "index.js",
-  "hash": "81ca5ea477ed129980d53be2664ef817f5015d9524b417af73cc6e276cade888",
+  "hash": "6ec0a53b91f7f9acc689fef96f666a3edeeb3c1313cc2b6fb945ab4c33913f0b",
   "vendetta": {
     "icon": "ChatIcon"
   }
